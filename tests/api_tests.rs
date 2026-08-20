@@ -357,3 +357,43 @@ async fn delete_user_removes_user() {
 
     assert_eq!(response.status(), 404);
 }
+
+#[tokio::test]
+async fn update_user_rejects_empty_name() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query("INSERT INTO users (name) VALUES (?)")
+        .bind("Alice")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let app = create_app(pool);
+
+    let request = axum::http::Request::builder()
+        .method("PUT")
+        .uri("/users/1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(r#"{"name":""}"#))
+        .unwrap();
+
+    let response = tower::ServiceExt::oneshot(app, request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+}
