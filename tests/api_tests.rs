@@ -431,3 +431,36 @@ async fn update_user_returns_not_found_for_missing_user() {
 
     assert_eq!(response.status(), 404);
 }
+
+#[tokio::test]
+async fn delete_user_returns_not_found_for_missing_user() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = create_app(pool);
+
+    let request = axum::http::Request::builder()
+        .method("DELETE")
+        .uri("/users/999")
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let response = tower::ServiceExt::oneshot(app, request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 404);
+}
