@@ -19,6 +19,12 @@ async fn get_users_returns_success() {
     .execute(&pool)
     .await
     .unwrap();
+    
+    sqlx::query("INSERT INTO users (name) VALUES (?)")
+    .bind("Daniel")
+    .execute(&pool)
+    .await
+    .unwrap();
 
     let app = create_app(pool);
 
@@ -28,8 +34,16 @@ async fn get_users_returns_success() {
         .unwrap();
 
     let response = tower::ServiceExt::oneshot(app, response)
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
-    assert_eq!(response.status(), 200);
+assert_eq!(response.status(), 200);
+
+let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+    .await
+    .unwrap();
+
+let body = String::from_utf8(body.to_vec()).unwrap();
+
+assert!(body.contains("Daniel"));
 }
