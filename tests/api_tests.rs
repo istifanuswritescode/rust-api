@@ -1,5 +1,12 @@
+use serde::Deserialize;
 use rust_api::create_app;
 use sqlx::sqlite::SqlitePoolOptions;
+
+#[derive(Deserialize)]
+struct TestUser {
+    id: u32,
+    name: String,
+}
 
 #[tokio::test]
 async fn get_users_returns_success() {
@@ -43,7 +50,10 @@ let body = axum::body::to_bytes(response.into_body(), usize::MAX)
     .await
     .unwrap();
 
-let body = String::from_utf8(body.to_vec()).unwrap();
+let users: Vec<TestUser> =
+    serde_json::from_slice(&body).unwrap();
 
-assert!(body.contains("Daniel"));
+assert_eq!(users.len(), 1);
+assert_eq!(users[0].name, "Daniel");
+assert_eq!(users[0].id, 1);
 }
