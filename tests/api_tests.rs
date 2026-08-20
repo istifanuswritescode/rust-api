@@ -101,3 +101,37 @@ let user: TestUser =
 assert_eq!(user.id, 1);
 assert_eq!(user.name, "John");
 }
+
+#[tokio::test]
+async fn create_user_rejects_empty_name() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = create_app(pool);
+
+    let request = axum::http::Request::builder()
+        .method("POST")
+        .uri("/users")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(r#"{"name":""}"#))
+        .unwrap();
+
+    let response = tower::ServiceExt::oneshot(app, request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+}
