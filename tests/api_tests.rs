@@ -57,3 +57,47 @@ assert_eq!(users.len(), 1);
 assert_eq!(users[0].name, "Daniel");
 assert_eq!(users[0].id, 1);
 }
+
+#[tokio::test]
+async fn create_user_returns_created_user() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .unwrap();
+
+    sqlx::query(
+        r#"
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = create_app(pool);
+
+    let request = axum::http::Request::builder()
+        .method("POST")
+        .uri("/users")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(r#"{"name":"John"}"#))
+        .unwrap();
+
+    let response = tower::ServiceExt::oneshot(app, request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 201);
+
+let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+    .await
+    .unwrap();
+
+let user: TestUser =
+    serde_json::from_slice(&body).unwrap();
+
+assert_eq!(user.id, 1);
+assert_eq!(user.name, "John");
+}
