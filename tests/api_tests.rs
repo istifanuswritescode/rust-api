@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use rust_api::create_app;
-use sqlx::sqlite::SqlitePoolOptions;
 
 #[derive(Deserialize)]
 struct TestUser {
@@ -8,10 +7,8 @@ struct TestUser {
     name: String,
 }
 
-#[tokio::test]
-async fn get_users_returns_success() {
-    let pool = SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
+async fn setup_database() -> sqlx::SqlitePool {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .unwrap();
 
@@ -26,6 +23,13 @@ async fn get_users_returns_success() {
     .execute(&pool)
     .await
     .unwrap();
+
+    pool
+}
+
+#[tokio::test]
+async fn get_users_returns_success() {
+    let pool = setup_database().await;
     
     sqlx::query("INSERT INTO users (name) VALUES (?)")
     .bind("Daniel")
@@ -60,22 +64,7 @@ assert_eq!(users[0].id, 1);
 
 #[tokio::test]
 async fn create_user_returns_created_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
+       let pool = setup_database().await;
     let app = create_app(pool);
 
     let request = axum::http::Request::builder()
@@ -104,21 +93,7 @@ assert_eq!(user.name, "John");
 
 #[tokio::test]
 async fn create_user_rejects_empty_name() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     let app = create_app(pool);
 
@@ -138,21 +113,7 @@ async fn create_user_rejects_empty_name() {
 
 #[tokio::test]
 async fn get_user_returns_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     sqlx::query("INSERT INTO users (name) VALUES (?)")
         .bind("Alice")
@@ -187,21 +148,7 @@ async fn get_user_returns_user() {
 
 #[tokio::test]
 async fn get_user_returns_not_found_for_missing_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     let app = create_app(pool);
 
@@ -220,21 +167,7 @@ async fn get_user_returns_not_found_for_missing_user() {
 
 #[tokio::test]
 async fn update_user_returns_updated_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     sqlx::query("INSERT INTO users (name) VALUES (?)")
         .bind("Alice")
@@ -270,21 +203,8 @@ async fn update_user_returns_updated_user() {
 
 #[tokio::test]
 async fn delete_user_returns_success() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
+    let pool = setup_database().await;
 
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
 
     sqlx::query("INSERT INTO users (name) VALUES (?)")
         .bind("Alice")
@@ -309,21 +229,7 @@ async fn delete_user_returns_success() {
 
 #[tokio::test]
 async fn delete_user_removes_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     sqlx::query("INSERT INTO users (name) VALUES (?)")
         .bind("Alice")
@@ -360,21 +266,7 @@ async fn delete_user_removes_user() {
 
 #[tokio::test]
 async fn update_user_rejects_empty_name() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let pool = setup_database().await;
 
     sqlx::query("INSERT INTO users (name) VALUES (?)")
         .bind("Alice")
@@ -400,22 +292,7 @@ async fn update_user_rejects_empty_name() {
 
 #[tokio::test]
 async fn update_user_returns_not_found_for_missing_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
+    let pool = setup_database().await;
     let app = create_app(pool);
 
     let request = axum::http::Request::builder()
@@ -434,22 +311,7 @@ async fn update_user_returns_not_found_for_missing_user() {
 
 #[tokio::test]
 async fn delete_user_returns_not_found_for_missing_user() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .unwrap();
-
-    sqlx::query(
-        r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
+    let pool = setup_database().await;
     let app = create_app(pool);
 
     let request = axum::http::Request::builder()
