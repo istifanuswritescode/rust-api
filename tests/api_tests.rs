@@ -1,5 +1,11 @@
 use serde::Deserialize;
-use rust_api::create_app;
+use rust_api::{create_app, hash_password, verify_password};
+
+use tower::ServiceExt;
+use axum::{
+    body::{to_bytes, Body},
+    http::{Request, StatusCode},
+};
 
 #[derive(Deserialize)]
 struct TestUser {
@@ -14,10 +20,11 @@ async fn setup_database() -> sqlx::SqlitePool {
 
     sqlx::query(
         r#"
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
+   CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT 'test-password-hash'
+)
         "#,
     )
     .execute(&pool)
@@ -71,7 +78,9 @@ async fn create_user_returns_created_user() {
         .method("POST")
         .uri("/users")
         .header("content-type", "application/json")
-        .body(axum::body::Body::from(r#"{"name":"John"}"#))
+       .body(axum::body::Body::from(
+    r#"{"name":"John","password":"secret123"}"#,
+))
         .unwrap();
 
     let response = tower::ServiceExt::oneshot(app, request)
@@ -101,7 +110,9 @@ async fn create_user_rejects_empty_name() {
         .method("POST")
         .uri("/users")
         .header("content-type", "application/json")
-        .body(axum::body::Body::from(r#"{"name":""}"#))
+       .body(axum::body::Body::from(
+    r#"{"name":"","password":"secret123"}"#,
+))
         .unwrap();
 
     let response = tower::ServiceExt::oneshot(app, request)
@@ -325,4 +336,131 @@ async fn delete_user_returns_not_found_for_missing_user() {
         .unwrap();
 
     assert_eq!(response.status(), 404);
+}
+
+#[test]
+fn password_is_hashed() {
+    let password = "secret123";
+
+    let hash1 = hash_password(password).unwrap();
+    let hash2 = hash_password(password).unwrap();
+
+    assert_ne!(hash1, password);
+    assert_ne!(hash2, password);
+    assert_ne!(hash1, hash2);
+}
+
+#[test]
+fn password_verification_works() {
+    let password = "secret123";
+
+    let password_hash = hash_password(password).unwrap();
+
+    assert!(verify_password(password, &password_hash).unwrap());
+    assert!(!verify_password("wrong-password", &password_hash).unwrap());
+}
+
+#[tokio::test]
+async fn login_returns_token_for_correct_password() {
+    let pool = setup_database().await;
+
+    unsafe {
+    std::env::set_var("JWT_SECRET", "test-secret");
+}
+
+    let password_hash = hash_password("secret123").unwrap();
+
+    sqlx::query(
+        "INSERT INTO users (name, password_hash) VALUES (?, ?)"
+    )
+    .bind("Alice")
+    .bind(&password_hash)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = create_app(pool);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"name":"Alice","password":"secret123"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+  assert!(body.contains("\"token\""));
+}
+
+#[tokio::test]
+async fn login_rejects_unknown_user() {
+    let pool = setup_database().await;
+
+    let app = create_app(pool);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"name":"Unknown","password":"secret123"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn login_rejects_wrong_password() {
+    let pool = setup_database().await;
+
+    let password_hash = hash_password("secret123").unwrap();
+
+    sqlx::query(
+        "INSERT INTO users (name, password_hash)
+         VALUES (?, ?)"
+    )
+    .bind("Alice")
+        .bind(&password_hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+#[test]
+fn create_token_returns_token() {
+    let token = rust_api::create_token(1, "test-secret")
+        .expect("token should be created");
+
+    assert!(!token.is_empty());
+}
+
+#[test]
+fn verify_token_returns_claims() {
+    let token = rust_api::create_token(42, "test-secret")
+        .expect("token should be created");
+
+    let claims = rust_api::verify_token(&token, "test-secret")
+        .expect("token should be valid");
+
+    assert_eq!(claims.sub, 42);
 }

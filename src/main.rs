@@ -16,10 +16,11 @@ async fn main() {
 
     sqlx::query(
         r#"
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
+       CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL
+)
         "#,
     )
     .execute(&pool)
