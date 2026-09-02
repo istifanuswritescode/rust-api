@@ -1,3 +1,4 @@
 /target
 users.db
 .env
+.vs/
